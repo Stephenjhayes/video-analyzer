@@ -26,19 +26,39 @@ const PROVIDERS: { id: Provider; label: string; defaultModel: string; models: st
     id: 'gemini',
     label: 'Google Gemini',
     defaultModel: 'gemini-2.5-flash',
-    models: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+    models: [
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+    ],
   },
   {
     id: 'openai',
     label: 'OpenAI',
     defaultModel: 'gpt-4o',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+    models: [
+      'gpt-4.1',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
+      'gpt-4o',
+      'gpt-4o-mini',
+      'o4-mini',
+      'o3',
+    ],
   },
   {
     id: 'anthropic',
     label: 'Anthropic',
-    defaultModel: 'claude-opus-4-5',
-    models: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-3-7-sonnet-20250219'],
+    defaultModel: 'claude-opus-4-6',
+    models: [
+      'claude-opus-4-6',
+      'claude-sonnet-4-6',
+      'claude-haiku-4-5',
+      'claude-opus-4-5',
+      'claude-sonnet-4-5',
+    ],
   },
 ];
 

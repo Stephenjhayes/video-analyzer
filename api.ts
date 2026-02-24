@@ -66,6 +66,9 @@ async function generateWithGemini(
 
 // ─── OpenAI provider ──────────────────────────────────────────────────────────
 
+// O-series reasoning models have different API constraints
+const OPENAI_O_SERIES = new Set(['o1', 'o1-mini', 'o3', 'o3-mini', 'o4-mini']);
+
 async function generateWithOpenAI(
   text: string,
   functionDeclarations: FunctionDeclaration[],
@@ -73,6 +76,8 @@ async function generateWithOpenAI(
   apiKey: string,
   model = 'gpt-4o',
 ) {
+  const isOSeries = OPENAI_O_SERIES.has(model);
+
   // Convert function declarations to OpenAI tools format
   const tools = functionDeclarations.map((fn) => ({
     type: 'function',
@@ -100,22 +105,34 @@ async function generateWithOpenAI(
     });
   }
 
+  const requestBody: any = {
+    model,
+    messages: [
+      // O-series doesn't support system role — prepend to user message instead
+      ...(isOSeries ? [] : [{ role: 'system', content: systemInstruction }]),
+      {
+        role: 'user',
+        content: isOSeries
+          ? [{ type: 'text', text: `${systemInstruction}\n\n${text}` }, ...userContent.slice(1)]
+          : userContent,
+      },
+    ],
+    tools,
+    tool_choice: 'required',
+  };
+
+  // O-series doesn't support temperature
+  if (!isOSeries) {
+    requestBody.temperature = 0.5;
+  }
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: userContent },
-      ],
-      tools,
-      tool_choice: 'required',
-      temperature: 0.5,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -147,7 +164,7 @@ async function generateWithAnthropic(
   functionDeclarations: FunctionDeclaration[],
   file: UploadedFile,
   apiKey: string,
-  model = 'claude-opus-4-5',
+  model = 'claude-opus-4-6',
 ) {
   // Convert function declarations to Anthropic tools format
   const tools = functionDeclarations.map((fn) => ({
