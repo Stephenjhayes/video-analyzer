@@ -45,7 +45,6 @@
 
 #root {
   width: 100vw;
-  height: 100vh;
 }
 
 h1, h2, h3, h4, h5, h6 { font-weight: normal; }
@@ -112,11 +111,10 @@ button .icon { display: block; }
 
 main {
   max-width: 1200px;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   margin: 0 auto;
-  overflow: hidden;
   background: var(--background);
   color: var(--text);
 }
@@ -125,14 +123,16 @@ main {
   display: flex;
   min-height: 50vh;
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--background);
 }
 
 .tools {
   display: flex;
   gap: 20px;
   flex: 1;
-  min-height: 0;
-  overflow: hidden;
   transition: opacity 0.2s;
 }
 .tools.inactive { opacity: 0.2; pointer-events: none; }
@@ -228,7 +228,6 @@ main {
 .output {
   flex: 1;
   padding: 20px 15px;
-  overflow: auto;
   position: relative;
 }
 .output:hover .sentence { opacity: 0.5; }
