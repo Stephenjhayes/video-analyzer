@@ -37,17 +37,14 @@ function downloadFile(content: string, filename: string, mimeType = 'text/plain'
 
 // ─── PlantUML server rendering ────────────────────────────────────────────────
 
-function encodePlantUML(source: string): string {
-  // PlantUML uses a deflate-based encoding for its server API
-  // We use the public plantuml.com server via URL encoding
-  const encoded = encodeURIComponent(source);
-  return encoded;
-}
-
 function getPlantUMLSvgUrl(source: string): string {
-  // Use the PlantUML proxy endpoint via public server
-  const b64 = btoa(unescape(encodeURIComponent(source)));
-  return `https://www.plantuml.com/plantuml/svg/${b64}`;
+  // PlantUML server accepts ~h + hex-encoded UTF-8 bytes
+  // This is the simplest reliable approach without external libraries
+  const utf8Bytes = new TextEncoder().encode(source);
+  const hex = Array.from(utf8Bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `https://www.plantuml.com/plantuml/svg/~h${hex}`;
 }
 
 // ─── Copy button component ────────────────────────────────────────────────────
@@ -73,6 +70,8 @@ function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) 
 
 // ─── Mermaid panel ────────────────────────────────────────────────────────────
 
+let mermaidInitialized = false;
+
 function MermaidPanel({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -84,31 +83,50 @@ function MermaidPanel({ code }: { code: string }) {
     setRenderError(null);
     setRendered(false);
 
+    let cancelled = false;
+
     const render = async () => {
       try {
-        // Dynamically import mermaid from CDN
         const mermaid = (await import('mermaid')).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: document.documentElement.classList.contains('dark') ||
-            window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark'
-            : 'default',
-          securityLevel: 'loose',
-        });
 
-        const id = 'mermaid-' + Date.now();
-        const { svg } = await mermaid.render(id, code);
-        if (containerRef.current) {
+        if (!mermaidInitialized) {
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+            securityLevel: 'loose',
+          });
+          mermaidInitialized = true;
+        }
+
+        // Use a hidden off-screen element as render target to avoid DOM issues
+        const tempId = `mermaid-render-${Date.now()}`;
+        const { svg } = await mermaid.render(tempId, code);
+
+        // Clean up any orphaned elements mermaid may have left in <body>
+        document.getElementById(tempId)?.remove();
+        document.getElementById(`d${tempId}`)?.remove();
+
+        if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
+          // Make SVG responsive
+          const svgEl = containerRef.current.querySelector('svg');
+          if (svgEl) {
+            svgEl.removeAttribute('height');
+            svgEl.style.maxWidth = '100%';
+            svgEl.style.height = 'auto';
+          }
           setRendered(true);
         }
       } catch (err: any) {
-        setRenderError(err?.message || 'Failed to render diagram');
+        if (!cancelled) {
+          setRenderError(err?.message || 'Failed to render diagram');
+        }
       }
     };
 
     render();
+
+    return () => { cancelled = true; };
   }, [code]);
 
   return (

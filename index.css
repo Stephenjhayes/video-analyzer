@@ -131,6 +131,7 @@ main {
   display: flex;
   gap: 20px;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   transition: opacity 0.2s;
 }
@@ -496,13 +497,15 @@ main {
   padding: 16px;
   overflow: auto;
   min-height: 120px;
+}
+.diagramRender svg { max-width: 100%; height: auto; display: block; }
+
+.plantumlRender {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
-.diagramRender svg { max-width: 100%; height: auto; }
-
-.plantumlRender img { max-width: 100%; height: auto; }
+.plantumlRender img { max-width: 100%; height: auto; display: block; }
 
 .diagramError {
   padding: 16px;
