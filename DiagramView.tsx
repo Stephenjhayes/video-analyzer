@@ -35,16 +35,60 @@ function downloadFile(content: string, filename: string, mimeType = 'text/plain'
   URL.revokeObjectURL(url);
 }
 
-// ─── PlantUML server rendering ────────────────────────────────────────────────
+// ─── PlantUML encoding ────────────────────────────────────────────────────────
+// PlantUML server requires: deflate(utf8(source)) → custom base64 alphabet
+// We use the browser's CompressionStream API for deflate-raw.
 
-function getPlantUMLSvgUrl(source: string): string {
-  // PlantUML server accepts ~h + hex-encoded UTF-8 bytes
-  // This is the simplest reliable approach without external libraries
-  const utf8Bytes = new TextEncoder().encode(source);
-  const hex = Array.from(utf8Bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  return `https://www.plantuml.com/plantuml/svg/~h${hex}`;
+const PLANTUML_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
+
+function encodePlantUMLBase64(data: Uint8Array): string {
+  let result = '';
+  for (let i = 0; i < data.length; i += 3) {
+    const b0 = data[i];
+    const b1 = i + 1 < data.length ? data[i + 1] : 0;
+    const b2 = i + 2 < data.length ? data[i + 2] : 0;
+    result += PLANTUML_ALPHABET[(b0 >> 2) & 0x3f];
+    result += PLANTUML_ALPHABET[((b0 & 0x3) << 4) | ((b1 >> 4) & 0xf)];
+    result += PLANTUML_ALPHABET[((b1 & 0xf) << 2) | ((b2 >> 6) & 0x3)];
+    result += PLANTUML_ALPHABET[b2 & 0x3f];
+  }
+  return result;
+}
+
+async function getPlantUMLSvgUrl(source: string): Promise<string> {
+  try {
+    const utf8 = new TextEncoder().encode(source);
+
+    // Use CompressionStream (deflate-raw) — supported in all modern browsers
+    const cs = new CompressionStream('deflate-raw');
+    const writer = cs.writable.getWriter();
+    writer.write(utf8);
+    writer.close();
+
+    const compressedChunks: Uint8Array[] = [];
+    const reader = cs.readable.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      compressedChunks.push(value);
+    }
+
+    const totalLength = compressedChunks.reduce((sum, c) => sum + c.length, 0);
+    const compressed = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of compressedChunks) {
+      compressed.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const encoded = encodePlantUMLBase64(compressed);
+    return `https://www.plantuml.com/plantuml/svg/${encoded}`;
+  } catch {
+    // Fallback: ~h hex encoding (may fail for very long diagrams)
+    const utf8Bytes = new TextEncoder().encode(source);
+    const hex = Array.from(utf8Bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    return `https://www.plantuml.com/plantuml/svg/~h${hex}`;
+  }
 }
 
 // ─── Copy button component ────────────────────────────────────────────────────
@@ -73,15 +117,25 @@ function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) 
 let mermaidInitialized = false;
 
 function MermaidPanel({ code }: { code: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  // renderHost is a non-React-managed div we insert Mermaid SVG into.
+  // We keep a ref to the wrapper React owns, and manually append/remove
+  // the host element — this avoids React's reconciler touching innerHTML.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current || !code) return;
+    if (!wrapperRef.current || !code) return;
 
     setRenderError(null);
     setRendered(false);
+
+    // Create a fresh host div outside React's management
+    const host = document.createElement('div');
+    host.style.cssText = 'width:100%;overflow:auto;';
+    hostRef.current = host;
+    wrapperRef.current.appendChild(host);
 
     let cancelled = false;
 
@@ -98,18 +152,16 @@ function MermaidPanel({ code }: { code: string }) {
           mermaidInitialized = true;
         }
 
-        // Use a hidden off-screen element as render target to avoid DOM issues
         const tempId = `mermaid-render-${Date.now()}`;
         const { svg } = await mermaid.render(tempId, code);
 
-        // Clean up any orphaned elements mermaid may have left in <body>
+        // Clean up any elements Mermaid may have left in <body>
         document.getElementById(tempId)?.remove();
         document.getElementById(`d${tempId}`)?.remove();
 
-        if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg;
-          // Make SVG responsive
-          const svgEl = containerRef.current.querySelector('svg');
+        if (!cancelled && hostRef.current) {
+          hostRef.current.innerHTML = svg;
+          const svgEl = hostRef.current.querySelector('svg');
           if (svgEl) {
             svgEl.removeAttribute('height');
             svgEl.style.maxWidth = '100%';
@@ -120,13 +172,19 @@ function MermaidPanel({ code }: { code: string }) {
       } catch (err: any) {
         if (!cancelled) {
           setRenderError(err?.message || 'Failed to render diagram');
+          hostRef.current?.remove();
         }
       }
     };
 
     render();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Detach the host element so React doesn't try to manage it
+      hostRef.current?.remove();
+      hostRef.current = null;
+    };
   }, [code]);
 
   return (
@@ -157,8 +215,10 @@ function MermaidPanel({ code }: { code: string }) {
         </div>
       ) : (
         <>
-          <div className="diagramRender" ref={containerRef}>
+          {/* wrapperRef is owned by React but we imperatively manage its child */}
+          <div className="diagramRender">
             {!rendered && <div className="loading">Rendering diagram<span>...</span></div>}
+            <div ref={wrapperRef} />
           </div>
           <details className="diagramSource">
             <summary>View source</summary>
@@ -173,11 +233,16 @@ function MermaidPanel({ code }: { code: string }) {
 // ─── PlantUML panel ───────────────────────────────────────────────────────────
 
 function PlantUMLPanel({ code }: { code: string }) {
+  const [svgUrl, setSvgUrl] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);
 
-  // Use plantuml.com server for rendering
-  const svgUrl = getPlantUMLSvgUrl(code);
+  useEffect(() => {
+    setImgError(false);
+    setImgLoading(true);
+    setSvgUrl(null);
+    getPlantUMLSvgUrl(code).then(setSvgUrl);
+  }, [code]);
 
   return (
     <div className="diagramPanel">
@@ -208,14 +273,16 @@ function PlantUMLPanel({ code }: { code: string }) {
       ) : (
         <>
           <div className="diagramRender plantumlRender">
-            {imgLoading && <div className="loading">Loading diagram<span>...</span></div>}
-            <img
-              src={svgUrl}
-              alt="PlantUML workflow diagram"
-              style={{ display: imgLoading ? 'none' : 'block' }}
-              onLoad={() => setImgLoading(false)}
-              onError={() => { setImgError(true); setImgLoading(false); }}
-            />
+            {(!svgUrl || imgLoading) && <div className="loading">Loading diagram<span>...</span></div>}
+            {svgUrl && (
+              <img
+                src={svgUrl}
+                alt="PlantUML workflow diagram"
+                style={{ display: imgLoading ? 'none' : 'block' }}
+                onLoad={() => setImgLoading(false)}
+                onError={() => { setImgError(true); setImgLoading(false); }}
+              />
+            )}
           </div>
           <details className="diagramSource">
             <summary>View source</summary>
