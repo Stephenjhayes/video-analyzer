@@ -33,6 +33,7 @@ export default function VideoPlayer({
   isLoadingVideo,
   videoError,
   jumpToTimecode,
+  onVideoReady,
 }) {
   const [video, setVideo] = useState(null);
   const [duration, setDuration] = useState(0);
@@ -110,7 +111,7 @@ export default function VideoPlayer({
           <div>
             <video
               src={url}
-              ref={setVideo}
+              ref={(el) => { setVideo(el); onVideoReady?.(el); }}
               onClick={togglePlay}
               preload="auto"
               crossOrigin="anonymous"

@@ -1,116 +1,291 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
 /* tslint:disable */
-// Copyright 2024 Google LLC
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Video Analyzer - Main App Component
+// Multi-provider workflow video analysis tool
 
 import c from 'classnames';
-import {useRef, useState} from 'react';
-import {generateContent, uploadFile} from './api';
-import Chart from './Chart.jsx';
+import { useRef, useState } from 'react';
+import {
+  extractFrames,
+  generateContent,
+  Provider,
+  ProviderConfig,
+  uploadFileToGemini,
+  UploadedFile,
+} from './api';
+import DiagramView from './DiagramView.jsx';
 import functions from './functions';
+import JSONLView from './JSONLView.jsx';
 import modes from './modes';
-import {timeToSecs} from './utils';
+import { timeToSecs } from './utils';
 import VideoPlayer from './VideoPlayer.jsx';
 
-const chartModes = Object.keys(modes.Chart.subModes);
+// ─── Provider configuration ───────────────────────────────────────────────────
+
+const PROVIDERS: { id: Provider; label: string; defaultModel: string; models: string[] }[] = [
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    defaultModel: 'gemini-2.5-flash',
+    models: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    defaultModel: 'gpt-4o',
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic',
+    defaultModel: 'claude-opus-4-5',
+    models: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-3-7-sonnet-20250219'],
+  },
+];
+
+// ─── Session storage helpers ──────────────────────────────────────────────────
+
+const STORAGE_KEY = 'va_provider_config';
+
+function loadStoredConfig(): Partial<Record<Provider, { apiKey: string; model: string }>> {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredConfig(config: Partial<Record<Provider, { apiKey: string; model: string }>>) {
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
+// ─── Provider Setup Panel ─────────────────────────────────────────────────────
+
+function ProviderSetup({ onReady }: { onReady: (config: ProviderConfig) => void }) {
+  const stored = loadStoredConfig();
+  const [provider, setProvider] = useState<Provider>('gemini');
+  const [model, setModel] = useState(PROVIDERS[0].defaultModel);
+  const [apiKey, setApiKey] = useState(stored['gemini']?.apiKey || '');
+  const [showKey, setShowKey] = useState(false);
+
+  const providerInfo = PROVIDERS.find((p) => p.id === provider)!;
+
+  const handleProviderChange = (p: Provider) => {
+    setProvider(p);
+    const info = PROVIDERS.find((x) => x.id === p)!;
+    setModel(stored[p]?.model || info.defaultModel);
+    setApiKey(stored[p]?.apiKey || '');
+  };
+
+  const handleSubmit = () => {
+    if (!apiKey.trim()) return;
+    const cfg: ProviderConfig = { provider, apiKey: apiKey.trim(), model };
+    saveStoredConfig({ ...stored, [provider]: { apiKey: apiKey.trim(), model } });
+    onReady(cfg);
+  };
+
+  return (
+    <div className="providerSetup">
+      <div className="providerSetupInner">
+        <h1 className="providerTitle">🎬 Workflow Video Analyzer</h1>
+        <p className="providerSubtitle">
+          Analyse UI workflow videos to generate executive summaries, step-by-step breakdowns,
+          sequence diagrams, and rich JSONL context.
+        </p>
+
+        <div className="providerForm">
+          <div className="providerFormGroup">
+            <label>LLM Provider</label>
+            <div className="providerTabs">
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p.id}
+                  className={c('providerTab', { active: provider === p.id })}
+                  onClick={() => handleProviderChange(p.id)}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="providerFormGroup">
+            <label>Model</label>
+            <div className="modelSelector">
+              <select value={model} onChange={(e) => setModel(e.target.value)}>
+                {providerInfo.models.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="providerFormGroup">
+            <label>API Key</label>
+            <div className="apiKeyInput">
+              <input
+                type={showKey ? 'text' : 'password'}
+                placeholder={`Paste your ${providerInfo.label} API key...`}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button className="apiKeyToggle" onClick={() => setShowKey(!showKey)} type="button">
+                <span className="icon">{showKey ? 'visibility_off' : 'visibility'}</span>
+              </button>
+            </div>
+            <p className="apiKeyNote">
+              Keys are stored in session memory only and sent directly to the {providerInfo.label} API.
+              {provider !== 'gemini' && ' Frames are extracted locally from your video and sent as images.'}
+            </p>
+          </div>
+
+          <button
+            className="button generateButton providerStartBtn"
+            onClick={handleSubmit}
+            disabled={!apiKey.trim()}>
+            Start Analysing →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [vidUrl, setVidUrl] = useState(null);
-  const [file, setFile] = useState(null);
-  const [timecodeList, setTimecodeList] = useState(null);
-  const [requestedTimecode, setRequestedTimecode] = useState(null);
+  const [providerConfig, setProviderConfig] = useState<ProviderConfig | null>(null);
+  const [vidUrl, setVidUrl] = useState<string | null>(null);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [file, setFile] = useState<UploadedFile | null>(null);
+  const [timecodeList, setTimecodeList] = useState<any[] | null>(null);
+  const [diagramData, setDiagramData] = useState<{ mermaid: string; plantuml: string; summary?: string } | null>(null);
+  const [jsonlData, setJsonlData] = useState<{ contexts: any[]; metadata?: any } | null>(null);
+  const [requestedTimecode, setRequestedTimecode] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState(Object.keys(modes)[0]);
-  const [activeMode, setActiveMode] = useState();
+  const [activeMode, setActiveMode] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
+  const [isExtractingFrames, setIsExtractingFrames] = useState(false);
   const [videoError, setVideoError] = useState(false);
-  const [customPrompt, setCustomPrompt] = useState('');
-  const [chartMode, setChartMode] = useState(chartModes[0]);
-  const [chartPrompt, setChartPrompt] = useState('');
-  const [chartLabel, setChartLabel] = useState('');
+  const [showSidebar, setShowSidebar] = useState(true);
   const [theme] = useState(
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light',
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   );
-  const scrollRef = useRef();
-  const isCustomMode = selectedMode === 'Custom';
-  const isChartMode = selectedMode === 'Chart';
-  const isCustomChartMode = isChartMode && chartMode === 'Custom';
-  const hasSubMode = isCustomMode || isChartMode;
+  const scrollRef = useRef<HTMLElement | null>(null);
 
-  const setTimecodes = ({timecodes}) =>
-    setTimecodeList(
-      timecodes.map((t) => ({...t, text: t.text.replaceAll("\\'", "'")})),
-    );
+  // ─── Response handlers ──────────────────────────────────────────────────────
 
-  const onModeSelect = async (mode) => {
-    setActiveMode(mode);
-    setIsLoading(true);
-    setChartLabel(chartPrompt);
+  const setTimecodes = ({ timecodes }: { timecodes: any[] }) =>
+    setTimecodeList(timecodes.map((t) => ({ ...t, text: t.text?.replaceAll("\\'", "'") })));
 
-    const resp = await generateContent(
-      isCustomMode
-        ? modes[mode].prompt(customPrompt)
-        : isChartMode
-          ? modes[mode].prompt(
-              isCustomChartMode ? chartPrompt : modes[mode].subModes[chartMode],
-            )
-          : modes[mode].prompt,
-      functions({
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({timecodes}) =>
-          setTimecodeList(timecodes),
-      }),
-      file,
-    );
+  const setWorkflowDiagrams = ({ mermaid, plantuml, summary }: any) =>
+    setDiagramData({ mermaid, plantuml, summary });
 
-    const call = resp.functionCalls?.[0];
+  const setJsonlContext = ({ contexts, metadata }: any) =>
+    setJsonlData({ contexts, metadata });
 
-    if (call) {
-      ({
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({timecodes}) =>
-          setTimecodeList(timecodes),
-      })[call.name](call.args);
-    }
+  // ─── Video upload ───────────────────────────────────────────────────────────
 
-    setIsLoading(false);
-    scrollRef.current.scrollTo({top: 0});
-  };
-
-  const uploadVideo = async (e) => {
+  const uploadVideo = async (e: React.DragEvent) => {
     e.preventDefault();
-    setIsLoadingVideo(true);
-    setVidUrl(URL.createObjectURL(e.dataTransfer.files[0]));
+    if (!providerConfig) return;
 
-    const file = e.dataTransfer.files[0];
+    const videoFile = e.dataTransfer.files[0];
+    if (!videoFile) return;
+
+    setIsLoadingVideo(true);
+    setVideoError(false);
+    setTimecodeList(null);
+    setDiagramData(null);
+    setJsonlData(null);
+
+    const objectUrl = URL.createObjectURL(videoFile);
+    setVidUrl(objectUrl);
 
     try {
-      const res = await uploadFile(file);
-      setFile(res);
+      if (providerConfig.provider === 'gemini') {
+        const res = await uploadFileToGemini(videoFile, providerConfig.apiKey);
+        setFile(res);
+      } else {
+        // For non-Gemini: store reference; frames extracted on first analyse
+        setFile({ uri: objectUrl, mimeType: videoFile.type, frames: [] });
+      }
       setIsLoadingVideo(false);
-    } catch (e) {
+    } catch (err) {
+      console.error('Upload error:', err);
       setVideoError(true);
+      setIsLoadingVideo(false);
     }
   };
+
+  // ─── Mode execution ─────────────────────────────────────────────────────────
+
+  const onModeSelect = async (mode: string) => {
+    if (!file || !providerConfig) return;
+
+    setActiveMode(mode);
+    setIsLoading(true);
+    setTimecodeList(null);
+    setDiagramData(null);
+    setJsonlData(null);
+
+    try {
+      let uploadedFile = file;
+
+      // Extract frames for non-Gemini providers
+      if (providerConfig.provider !== 'gemini' && videoElement) {
+        if (!file.frames || file.frames.length === 0) {
+          setIsExtractingFrames(true);
+          const frames = await extractFrames(videoElement, 30);
+          setIsExtractingFrames(false);
+          uploadedFile = { ...file, frames };
+          setFile(uploadedFile);
+        }
+      }
+
+      const modeConfig = (modes as any)[mode];
+      const prompt = typeof modeConfig.prompt === 'string'
+        ? modeConfig.prompt
+        : modeConfig.prompt('');
+
+      const fnMap: Record<string, (args: any) => void> = {
+        set_timecodes: setTimecodes,
+        set_timecodes_with_objects: setTimecodes,
+        set_timecodes_with_numeric_values: ({ timecodes }: any) => setTimecodeList(timecodes),
+        set_workflow_diagrams: setWorkflowDiagrams,
+        set_jsonl_context: setJsonlContext,
+      };
+
+      const resp = await generateContent(prompt, functions(fnMap), uploadedFile, providerConfig);
+
+      const call = (resp as any).functionCalls?.[0];
+      if (call && fnMap[call.name]) {
+        fnMap[call.name](call.args);
+      }
+    } catch (err: any) {
+      console.error('Generate error:', err);
+      alert(`Analysis error: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+      setIsExtractingFrames(false);
+      scrollRef.current?.scrollTo({ top: 0 });
+    }
+  };
+
+  // ─── Provider setup screen ──────────────────────────────────────────────────
+
+  if (!providerConfig) {
+    return (
+      <div className={theme}>
+        <ProviderSetup onReady={setProviderConfig} />
+      </div>
+    );
+  }
+
+  const currentMode = (modes as any)[selectedMode];
+  const providerLabel = PROVIDERS.find((p) => p.id === providerConfig.provider)?.label || '';
 
   return (
     <main
@@ -119,108 +294,47 @@ export default function App() {
       onDragOver={(e) => e.preventDefault()}
       onDragEnter={() => {}}
       onDragLeave={() => {}}>
+
+      {/* Top: sidebar + video player */}
       <section className="top">
         {vidUrl && !isLoadingVideo && (
           <>
-            <div className={c('modeSelector', {hide: !showSidebar})}>
-              {hasSubMode ? (
-                <>
-                  <div>
-                    {isCustomMode ? (
-                      <>
-                        <h2>Custom prompt:</h2>
-                        <textarea
-                          placeholder="Type a custom prompt..."
-                          value={customPrompt}
-                          onChange={(e) => setCustomPrompt(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              onModeSelect(selectedMode);
-                            }
-                          }}
-                          rows="5"
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <h2>Chart this video by:</h2>
+            <div className={c('modeSelector', { hide: !showSidebar })}>
+              <div>
+                {/* Active provider chip */}
+                <div className="activeProv">
+                  <span className="activeProvLabel">
+                    {providerLabel} · {providerConfig.model || PROVIDERS.find((p) => p.id === providerConfig.provider)?.defaultModel}
+                  </span>
+                  <button className="changeProvBtn" onClick={() => setProviderConfig(null)}>
+                    Change
+                  </button>
+                </div>
 
-                        <div className="modeList">
-                          {chartModes.map((mode) => (
-                            <button
-                              key={mode}
-                              className={c('button', {
-                                active: mode === chartMode,
-                              })}
-                              onClick={() => setChartMode(mode)}>
-                              {mode}
-                            </button>
-                          ))}
-                        </div>
-                        <textarea
-                          className={c({active: isCustomChartMode})}
-                          placeholder="Or type a custom prompt..."
-                          value={chartPrompt}
-                          onChange={(e) => setChartPrompt(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              onModeSelect(selectedMode);
-                            }
-                          }}
-                          onFocus={() => setChartMode('Custom')}
-                          rows="2"
-                        />
-                      </>
-                    )}
+                <h2>Analyse video via:</h2>
+                <div className="modeList">
+                  {Object.entries(modes).map(([mode, modeData]: [string, any]) => (
                     <button
-                      className="button generateButton"
-                      onClick={() => onModeSelect(selectedMode)}
-                      disabled={
-                        (isCustomMode && !customPrompt.trim()) ||
-                        (isChartMode &&
-                          isCustomChartMode &&
-                          !chartPrompt.trim())
-                      }>
-                      ▶️ Generate
+                      key={mode}
+                      className={c('button', { active: mode === selectedMode })}
+                      onClick={() => setSelectedMode(mode)}>
+                      <span className="emoji">{modeData.emoji}</span>
+                      {mode}
                     </button>
-                  </div>
-                  <div className="backButton">
-                    <button
-                      onClick={() => setSelectedMode(Object.keys(modes)[0])}>
-                      <span className="icon">chevron_left</span>
-                      Back
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <h2>Explore this video via:</h2>
-                    <div className="modeList">
-                      {Object.entries(modes).map(([mode, {emoji}]) => (
-                        <button
-                          key={mode}
-                          className={c('button', {
-                            active: mode === selectedMode,
-                          })}
-                          onClick={() => setSelectedMode(mode)}>
-                          <span className="emoji">{emoji}</span> {mode}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <button
-                      className="button generateButton"
-                      onClick={() => onModeSelect(selectedMode)}>
-                      ▶️ Generate
-                    </button>
-                  </div>
-                </>
-              )}
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <button
+                  className="button generateButton"
+                  onClick={() => onModeSelect(selectedMode)}
+                  disabled={isLoading}>
+                  {isLoading ? '⏳ Analysing...' : '▶️ Analyse'}
+                </button>
+              </div>
             </div>
+
             <button
               className="collapseButton"
               onClick={() => setShowSidebar(!showSidebar)}>
@@ -238,54 +352,31 @@ export default function App() {
           jumpToTimecode={setRequestedTimecode}
           isLoadingVideo={isLoadingVideo}
           videoError={videoError}
+          onVideoReady={setVideoElement}
         />
       </section>
 
-      <div className={c('tools', {inactive: !vidUrl})}>
+      {/* Output: diagrams below video pane for diagram mode, inline otherwise */}
+      <div className={c('tools', { inactive: !vidUrl })}>
         <section
-          className={c('output', {['mode' + activeMode]: activeMode})}
-          ref={scrollRef}>
+          className={c('output', { ['mode' + activeMode]: activeMode })}
+          ref={scrollRef as any}>
           {isLoading ? (
             <div className="loading">
-              Waiting for model<span>...</span>
+              {isExtractingFrames
+                ? <>Extracting video frames<span>...</span></>
+                : <>Waiting for {providerLabel}<span>...</span></>}
             </div>
+          ) : diagramData ? (
+            <DiagramView data={diagramData} />
+          ) : jsonlData ? (
+            <JSONLView data={jsonlData} />
           ) : timecodeList ? (
-            activeMode === 'Table' ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Description</th>
-                    <th>Objects</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {timecodeList.map(({time, text, objects}, i) => (
-                    <tr
-                      key={i}
-                      role="button"
-                      onClick={() => setRequestedTimecode(timeToSecs(time))}>
-                      <td>
-                        <time>{time}</time>
-                      </td>
-                      <td>{text}</td>
-                      <td>{objects.join(', ')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : activeMode === 'Chart' ? (
-              <Chart
-                data={timecodeList}
-                yLabel={chartLabel}
-                jumpToTimecode={setRequestedTimecode}
-              />
-            ) : modes[activeMode].isList ? (
+            currentMode?.isList ? (
               <ul>
-                {timecodeList.map(({time, text}, i) => (
+                {timecodeList.map(({ time, text }, i) => (
                   <li key={i} className="outputItem">
-                    <button
-                      onClick={() => setRequestedTimecode(timeToSecs(time))}>
+                    <button onClick={() => setRequestedTimecode(timeToSecs(time))}>
                       <time>{time}</time>
                       <p className="text">{text}</p>
                     </button>
@@ -293,17 +384,16 @@ export default function App() {
                 ))}
               </ul>
             ) : (
-              timecodeList.map(({time, text}, i) => (
-                <>
+              timecodeList.map(({ time, text }, i) => (
+                <span key={i}>
                   <span
-                    key={i}
                     className="sentence"
                     role="button"
                     onClick={() => setRequestedTimecode(timeToSecs(time))}>
                     <time>{time}</time>
                     <span>{text}</span>
                   </span>{' '}
-                </>
+                </span>
               ))
             )
           ) : null}

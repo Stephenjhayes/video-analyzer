@@ -1,78 +1,58 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
 /* tslint:disable */
-// Copyright 2024 Google LLC
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Video Analyzer - Workflow Analysis Modes
+// Focused on UI workflow video analysis for enterprise/business use
 
 export default {
-  'A/V captions': {
-    emoji: '👀',
-    prompt: `For each scene in this video, generate captions that describe the \
-    scene along with any spoken text placed in quotation marks. Place each \
-    caption into an object sent to set_timecodes with the timecode of the caption \
-    in the video.`,
+  'Executive Summary': {
+    emoji: '📊',
+    prompt: `Analyse this UI workflow video recording at multiple levels. For each major section or transition in the video:
+1. Identify the application/system being used and likely user persona (e.g. admin, end user, manager)
+2. Summarise what business workflow or task is being performed
+3. Note key decisions, data entry points, or critical steps observed
+4. Highlight any errors, rework, or inefficiencies visible
+5. Provide an overall executive assessment of the workflow complexity and likely business impact.
+Call set_timecodes with a timecode and rich summary text for each distinct workflow phase observed.`,
     isList: true,
   },
 
-  Paragraph: {
-    emoji: '📝',
-    prompt: `Generate a paragraph that summarizes this video. Keep it to 3 to 5 \
-sentences. Place each sentence of the summary into an object sent to \
-set_timecodes with the timecode of the sentence in the video.`,
-  },
-
-  'Key moments': {
-    emoji: '🔑',
-    prompt: `Generate bullet points for the video. Place each bullet point into an \
-object sent to set_timecodes with the timecode of the bullet point in the video.`,
+  'Workflow Steps': {
+    emoji: '🪜',
+    prompt: `Analyse this UI workflow video and generate a precise step-by-step breakdown of every user action observed.
+For each step, capture: the exact UI action taken (click, type, select, navigate), the screen or application area,
+any data visible on screen, and the outcome or next state.
+Be granular - each distinct user interaction should be its own step.
+Call set_timecodes with the timecode and step description for each individual action.`,
     isList: true,
   },
 
-  Table: {
-    emoji: '🤓',
-    prompt: `Choose 5 key shots from this video and call set_timecodes_with_objects \
-with the timecode, text description of 10 words or less, and a list of objects \
-visible in the scene (with representative emojis).`,
+  'Diagram': {
+    emoji: '🗂️',
+    prompt: `Analyse this UI workflow video and generate BOTH a Mermaid sequence diagram AND a PlantUML activity diagram
+representing the complete workflow visible in the video.
+
+For the Mermaid diagram: use sequenceDiagram format showing the interactions between User, UI screens/applications, and any backend systems visible.
+For the PlantUML diagram: use @startuml/@enduml with activity diagram format showing the full workflow flow with decisions and parallel paths.
+
+Include all major workflow steps, decision points, system interactions, and data flows you can observe.
+Call set_workflow_diagrams once with both diagram texts as strings.`,
+    isDiagram: true,
   },
 
-  Haiku: {
-    emoji: '🌸',
-    prompt: `Generate a haiku for the video. Place each line of the haiku into an \
-object sent to set_timecodes with the timecode of the line in the video. Make sure \
-to follow the syllable count rules (5-7-5).`,
-  },
+  'JSONL Context': {
+    emoji: '📦',
+    prompt: `Perform a comprehensive deep analysis of this UI workflow video and generate structured JSONL context capturing everything observable.
 
-  Chart: {
-    emoji: '📈',
-    prompt: (input) =>
-      `Generate chart data for this video based on the following instructions: \
-${input}. Call set_timecodes_with_numeric_values once with the list of data values and timecodes.`,
-    subModes: {
-      Excitement:
-        'for each scene, estimate the level of excitement on a scale of 1 to 10',
-      Importance:
-        'for each scene, estimate the level of overall importance to the video on a scale of 1 to 10',
-      'Number of people': 'for each scene, count the number of people visible',
-    },
-  },
+For each significant moment in the video, extract and structure:
+- Screen/application identification (app name, module, page/view)
+- User persona and role indicators
+- All visible UI elements (fields, buttons, menus, data values)
+- User actions and interactions
+- Data being entered, displayed, or processed
+- Workflow state and business context
+- Any error messages, validations, or system responses
+- Navigation patterns and screen transitions
 
-  Custom: {
-    emoji: '🔧',
-    prompt: (input) =>
-      `Call set_timecodes once using the following instructions: ${input}`,
-    isList: true,
+Call set_jsonl_context once with a comprehensive array of structured context objects, one per significant workflow moment.`,
+    isJsonl: true,
   },
 };
