@@ -153,7 +153,7 @@ async function generateWithAnthropic(
   const tools = functionDeclarations.map((fn) => ({
     name: fn.name,
     description: fn.description,
-    input_schema: convertSchemaToOpenAI(fn.parameters), // Anthropic uses same JSON Schema format
+    input_schema: convertSchemaToOpenAI(fn.parameters),
   }));
 
   // Build content with frames if available
@@ -178,39 +178,62 @@ async function generateWithAnthropic(
 
   userContent.push({ type: 'text', text });
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 8096,
-      system: systemInstruction,
-      messages: [{ role: 'user', content: userContent }],
-      tools,
-      tool_choice: { type: 'any' },
-    }),
+  const body = JSON.stringify({
+    model,
+    max_tokens: 8096,
+    system: systemInstruction,
+    messages: [{ role: 'user', content: userContent }],
+    tools,
+    tool_choice: { type: 'any' },
   });
 
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`Anthropic error: ${err.error?.message || response.statusText}`);
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+  };
+
+  // Retry up to 3 times on 529 Overloaded with exponential backoff
+  const MAX_RETRIES = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.pow(2, attempt) * 2000; // 4s, 8s
+      console.log(`Anthropic overloaded, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body,
+    });
+
+    if (response.status === 529) {
+      lastError = new Error('Anthropic API is overloaded. Please try again in a moment.');
+      continue; // retry
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Anthropic error: ${err.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const toolUse = data.content?.find((c: { type: string }) => c.type === 'tool_use');
+
+    if (toolUse) {
+      return {
+        functionCalls: [{ name: toolUse.name, args: toolUse.input }],
+      };
+    }
+
+    return { functionCalls: [] };
   }
 
-  const data = await response.json();
-  const toolUse = data.content?.find((c: { type: string }) => c.type === 'tool_use');
-
-  if (toolUse) {
-    return {
-      functionCalls: [{ name: toolUse.name, args: toolUse.input }],
-    };
-  }
-
-  return { functionCalls: [] };
+  throw lastError ?? new Error('Anthropic request failed after retries.');
 }
 
 // ─── Schema conversion helper ─────────────────────────────────────────────────
