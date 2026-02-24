@@ -1,4 +1,7 @@
 @charset "UTF-8";
+
+/* ─── Theme variables ───────────────────────────────────────────────────────── */
+
 .light {
   --background: #F3F3F6;
   --text: #1A1C1E;
@@ -6,6 +9,10 @@
   --highlight: #fff;
   --track: #86878A;
   --link: #2872E3;
+  --surface: #fff;
+  --surface2: #EBEBEE;
+  --badge-bg: #E8F0FE;
+  --badge-text: #1a73e8;
 }
 
 .dark {
@@ -15,7 +22,13 @@
   --highlight: #000;
   --track: #37393C;
   --link: #87A9FF;
+  --surface: #26282B;
+  --surface2: #2E3033;
+  --badge-bg: #1a2744;
+  --badge-text: #87A9FF;
 }
+
+/* ─── Base reset ────────────────────────────────────────────────────────────── */
 
 * {
   margin: 0;
@@ -35,13 +48,8 @@
   height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-weight: normal;
-}
-
-li {
-  list-style: none;
-}
+h1, h2, h3, h4, h5, h6 { font-weight: normal; }
+li { list-style: none; }
 
 input, textarea {
   font-family: "Space Mono", monospace;
@@ -53,9 +61,7 @@ input, textarea {
   resize: none;
   user-select: text;
 }
-input::placeholder, textarea::placeholder {
-  user-select: none;
-}
+input::placeholder, textarea::placeholder { user-select: none; }
 
 textarea {
   width: 100%;
@@ -66,13 +72,9 @@ textarea {
   padding: 10px 15px;
   margin-bottom: 10px;
 }
-textarea.active {
-  border-color: var(--text);
-}
+textarea.active { border-color: var(--text); }
 
-[role=button] {
-  cursor: pointer;
-}
+[role=button] { cursor: pointer; }
 
 button {
   font-family: "Space Mono", monospace;
@@ -86,16 +88,9 @@ button {
   align-items: center;
   gap: 5px;
 }
-button:focus {
-  outline: none;
-}
-button[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-button .icon {
-  display: block;
-}
+button:focus { outline: none; }
+button[disabled] { opacity: 0.5; cursor: not-allowed; }
+button .icon { display: block; }
 
 .button {
   padding: 8px 10px;
@@ -105,16 +100,15 @@ button .icon {
   justify-content: center;
   gap: 5px;
 }
-.button.inactive {
-  opacity: 0.3;
-  pointer-events: none;
-}
+.button.inactive { opacity: 0.3; pointer-events: none; }
 
 .icon {
   font-family: "Material Symbols Outlined";
   font-weight: 300;
   line-height: 1;
 }
+
+/* ─── App layout ────────────────────────────────────────────────────────────── */
 
 main {
   max-width: 1200px;
@@ -140,10 +134,9 @@ main {
   overflow: hidden;
   transition: opacity 0.2s;
 }
-.tools.inactive {
-  opacity: 0.2;
-  pointer-events: none;
-}
+.tools.inactive { opacity: 0.2; pointer-events: none; }
+
+/* ─── Sidebar ───────────────────────────────────────────────────────────────── */
 
 .collapseButton {
   border-left: 1px solid var(--border);
@@ -152,10 +145,7 @@ main {
   align-items: center;
   justify-content: center;
 }
-.collapseButton .icon {
-  font-size: 24px;
-  color: var(--text);
-}
+.collapseButton .icon { font-size: 24px; color: var(--text); }
 
 .modeSelector {
   display: flex;
@@ -163,30 +153,20 @@ main {
   gap: 30px;
   overflow: hidden;
   width: 250px;
+  min-width: 250px;
+  transition: width 0.2s, min-width 0.2s;
 }
-.modeSelector.hide {
-  width: 0;
-}
-.modeSelector > div {
-  padding: 20px 15px;
-}
-.modeSelector > div:first-child {
-  flex: 1;
-  overflow: auto;
-}
-.modeSelector > div:last-child {
-  border-top: 1px solid var(--border);
-}
+.modeSelector.hide { width: 0; min-width: 0; }
+.modeSelector > div { padding: 20px 15px; }
+.modeSelector > div:first-child { flex: 1; overflow: auto; }
+.modeSelector > div:last-child { border-top: 1px solid var(--border); }
 .modeSelector h2 {
   font-size: 14px;
   color: var(--text);
   white-space: nowrap;
   margin-bottom: 15px;
 }
-.modeSelector.inactive {
-  opacity: 0.2;
-  pointer-events: none;
-}
+.modeSelector.inactive { opacity: 0.2; pointer-events: none; }
 
 .modeList {
   flex-direction: column;
@@ -204,15 +184,8 @@ main {
   min-width: fit-content;
   width: 100%;
 }
-.modeList .button:hover {
-  background: var(--border);
-}
-.modeList .button.active {
-  outline: 2px solid var(--text);
-}
-.modeList + textarea {
-  margin-top: 10px;
-}
+.modeList .button:hover { background: var(--border); }
+.modeList .button.active { outline: 2px solid var(--text); }
 
 .generateButton {
   padding: 12px 20px;
@@ -221,12 +194,35 @@ main {
   border: 1px solid var(--border);
 }
 
-.backButton {
-  border-top: none !important;
+/* ─── Active provider chip ──────────────────────────────────────────────────── */
+
+.activeProv {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 15px;
+  gap: 8px;
 }
-.backButton button {
-  font-size: 14px;
+.activeProvLabel {
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.changeProvBtn {
+  font-size: 11px;
+  color: var(--link);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.changeProvBtn:hover { text-decoration: underline; }
+
+/* ─── Output panel ──────────────────────────────────────────────────────────── */
 
 .output {
   flex: 1;
@@ -234,9 +230,7 @@ main {
   overflow: auto;
   position: relative;
 }
-.output:hover .sentence {
-  opacity: 0.5;
-}
+.output:hover .sentence { opacity: 0.5; }
 .output time {
   color: var(--link);
   padding: 2px 5px;
@@ -251,12 +245,8 @@ main {
   cursor: pointer;
   transition: opacity 0.2s;
 }
-.output .sentence:hover {
-  opacity: 1;
-}
-.output .sentence time {
-  margin-right: 8px;
-}
+.output .sentence:hover { opacity: 1; }
+.output .sentence time { margin-right: 8px; }
 .output ul {
   display: flex;
   flex-direction: column;
@@ -271,46 +261,10 @@ main {
   border-radius: 6px;
   width: 100%;
 }
-.output ul button:hover {
-  background: var(--border);
-}
-.output ul button p {
-  font-size: 14px;
-}
+.output ul button:hover { background: var(--border); }
+.output ul button p { font-size: 14px; }
 
-.modeEmojis .sentence {
-  font-size: 40px;
-  margin-right: 20px;
-}
-.modeEmojis .sentence time {
-  top: -8px;
-}
-
-.modeHaiku .sentence {
-  display: block;
-  font-size: 20px;
-}
-.modeHaiku .sentence time {
-  top: -5px;
-}
-
-.modeTable table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.modeTable th {
-  text-align: left;
-}
-.modeTable th, .modeTable td {
-  padding: 10px;
-}
-.modeTable tr {
-  border-bottom: 1px solid var(--border);
-  display: table-row;
-}
-.modeTable thead tr:hover {
-  background: transparent;
-}
+/* ─── Model selector ────────────────────────────────────────────────────────── */
 
 .modelSelector {
   position: relative;
@@ -323,19 +277,28 @@ main {
   right: 10px;
   top: 50%;
   transform: translateY(-55%);
+  pointer-events: none;
 }
 .modelSelector select {
   width: 100%;
   appearance: none;
   color: var(--text);
-  background: var(--border);
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 8px 30px 8px 12px;
   font-family: "Space Mono", monospace;
+  font-size: 13px;
   outline: none;
+  cursor: pointer;
 }
 
+/* ─── Loading ───────────────────────────────────────────────────────────────── */
+
+.loading {
+  padding: 20px;
+  font-size: 14px;
+}
 .loading span {
   display: inline-block;
   animation: loading steps(4, jump-none) 777ms infinite;
@@ -345,48 +308,417 @@ main {
 }
 
 @keyframes loading {
-  to {
-    width: 30px;
-  }
+  to { width: 30px; }
 }
 
-.lineChart {
+/* ─── Provider setup screen ─────────────────────────────────────────────────── */
+
+.providerSetup {
+  width: 100vw;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+  color: var(--text);
+  padding: 40px 20px;
+}
+
+.providerSetupInner {
   width: 100%;
-  height: 100%;
-}
-.lineChart path {
-  fill: none;
-  stroke: var(--link);
-  stroke-width: 2;
-}
-.lineChart circle {
-  fill: var(--background);
-  stroke: var(--text);
-  stroke-width: 2;
+  max-width: 540px;
 }
 
-.axisLabels text {
-  text-anchor: middle;
+.providerTitle {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.providerSubtitle {
+  font-size: 14px;
+  opacity: 0.7;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.providerForm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.providerFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.providerFormGroup label {
   font-size: 12px;
-  fill: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
 }
 
-.axisTitle {
+.providerTabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.providerTab {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.providerTab:hover { background: var(--border); }
+.providerTab.active {
+  background: var(--text);
+  color: var(--background);
+  border-color: var(--text);
+}
+
+.apiKeyInput {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.apiKeyInput input {
+  flex: 1;
+  padding: 10px 15px;
+  background: transparent;
+  font-size: 14px;
+  border: none;
+}
+.apiKeyToggle {
+  padding: 10px 12px;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  opacity: 0.6;
+}
+.apiKeyToggle:hover { opacity: 1; }
+
+.apiKeyNote {
+  font-size: 11px;
+  opacity: 0.5;
+  line-height: 1.5;
+}
+
+.providerStartBtn {
+  font-size: 15px;
+  padding: 14px 24px;
+  background: var(--text);
+  color: var(--background);
+  border: none;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+.providerStartBtn:hover:not([disabled]) { opacity: 0.85; }
+
+/* ─── Export buttons ────────────────────────────────────────────────────────── */
+
+.exportBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
   font-size: 12px;
-  fill: var(--text);
+  background: var(--surface2);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.exportBtn:hover { background: var(--border); }
+.exportBtn .icon { font-size: 14px; }
+
+.exportActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.dataPoint text {
-  fill: var(--text);
+/* ─── Diagram view ──────────────────────────────────────────────────────────── */
+
+.diagramView {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 0;
+}
+
+.diagramSummary {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.diagramExportAll {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.diagramPanel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.diagramPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--surface2);
+}
+.diagramPanelHeader h3 { font-size: 14px; white-space: nowrap; }
+
+.diagramRender {
+  padding: 16px;
+  overflow: auto;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.diagramRender svg { max-width: 100%; height: auto; }
+
+.plantumlRender img { max-width: 100%; height: auto; }
+
+.diagramError {
+  padding: 16px;
+  color: #e53935;
+  font-size: 13px;
+}
+.diagramError p { margin-bottom: 10px; }
+
+.diagramSource { border-top: 1px solid var(--border); }
+.diagramSource summary {
+  padding: 8px 16px;
   font-size: 12px;
-  text-anchor: middle;
-}
-
-.timeLabels text {
   cursor: pointer;
-  fill: var(--link);
+  opacity: 0.6;
+  user-select: none;
+}
+.diagramSource summary:hover { opacity: 1; }
+
+.diagramCode {
+  padding: 12px 16px;
+  font-size: 12px;
+  font-family: "Space Mono", monospace;
+  line-height: 1.5;
+  overflow: auto;
+  background: var(--surface2);
+  white-space: pre;
+}
+
+/* ─── JSONL view ────────────────────────────────────────────────────────────── */
+
+.jsonlView {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jsonlMetadata {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.jsonlMetadata h2 { font-size: 16px; margin-bottom: 10px; }
+
+.jsonlMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.jsonlMetaItem { display: flex; flex-direction: column; gap: 2px; }
+.jsonlMetaItem span:last-child { font-size: 14px; }
+
+.jsonlLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+}
+
+.jsonlExportBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.jsonlCount { font-size: 12px; opacity: 0.5; white-space: nowrap; }
+
+.jsonlCards { display: flex; flex-direction: column; gap: 8px; }
+
+.jsonlCard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.jsonlCardHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  text-align: left;
+  background: var(--surface2);
+  border-radius: 0;
+  border: none;
+  justify-content: flex-start;
+}
+.jsonlCardHeader:hover { background: var(--border); }
+
+.jsonlTimecode {
+  font-size: 12px;
+  color: var(--link);
+  white-space: nowrap;
+  min-width: 42px;
   text-decoration: underline;
 }
+
+.jsonlStep {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.jsonlStepText {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jsonlBadge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.jsonlBadge.phase { background: #f3e5f5; color: #7b1fa2; }
+.dark .jsonlBadge.phase { background: #3a1f4a; color: #ce93d8; }
+.jsonlBadge.app { background: #e8f5e9; color: #2e7d32; }
+.dark .jsonlBadge.app { background: #1b3a1f; color: #81c784; }
+
+.jsonlCardBody {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.jsonlSection h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+  margin-bottom: 6px;
+}
+
+.jsonlSection dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.jsonlSection dt { opacity: 0.5; white-space: nowrap; }
+.jsonlSection dd { word-break: break-word; }
+
+.jsonlUiElements { display: flex; flex-direction: column; gap: 4px; }
+
+.jsonlUiElement {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.jsonlValue {
+  font-family: "Space Mono", monospace;
+  background: var(--surface2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.jsonlState { opacity: 0.5; font-size: 11px; }
+
+.jsonlNotes {
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: -2px;
+}
+.jsonlNotes p { font-size: 13px; line-height: 1.5; }
+
+.jsonlRaw { border-top: 1px solid var(--border); padding-top: 10px; }
+.jsonlRaw details summary {
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.4;
+  user-select: none;
+  margin-bottom: 8px;
+}
+.jsonlRaw details summary:hover { opacity: 0.7; }
+.jsonlRaw pre {
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: auto;
+  background: var(--surface2);
+  padding: 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Line chart ────────────────────────────────────────────────────────────── */
+
+.lineChart { width: 100%; height: 100%; }
+.lineChart path { fill: none; stroke: var(--link); stroke-width: 2; }
+.lineChart circle { fill: var(--background); stroke: var(--text); stroke-width: 2; }
+.axisLabels text { text-anchor: middle; font-size: 12px; fill: var(--text); }
+.axisTitle { font-size: 12px; fill: var(--text); }
+.dataPoint text { fill: var(--text); font-size: 12px; text-anchor: middle; }
+.timeLabels text { cursor: pointer; fill: var(--link); text-decoration: underline; }
+
+/* ─── Video player ──────────────────────────────────────────────────────────── */
 
 video {
   max-height: 50vh;
@@ -407,13 +739,8 @@ video {
   user-select: none;
   border-left: 1px solid var(--border);
 }
-.videoPlayer:has(.timecodeMarker:hover) .videoCaption {
-  opacity: 0;
-}
-.videoPlayer > div:first-child {
-  display: flex;
-  flex: 1;
-}
+.videoPlayer:has(.timecodeMarker:hover) .videoCaption { opacity: 0; }
+.videoPlayer > div:first-child { display: flex; flex: 1; }
 
 .emptyVideo {
   height: 50vh;
@@ -423,14 +750,8 @@ video {
   justify-content: center;
   font-size: 16px;
 }
-.emptyVideo p {
-  max-width: 500px;
-  text-align: center;
-}
-.emptyVideo p span {
-  display: inline-block;
-  rotate: -45deg;
-}
+.emptyVideo p { max-width: 500px; text-align: center; }
+.emptyVideo p span { display: inline-block; rotate: -45deg; }
 
 .videoCaption {
   background: rgba(0, 0, 0, 0.8);
@@ -456,9 +777,8 @@ video {
   position: relative;
   background: var(--background);
 }
-.videoControls:hover .videoScrubber, .videoControls:hover .timecodeMarkerTick {
-  scale: 1 2.3;
-}
+.videoControls:hover .videoScrubber,
+.videoControls:hover .timecodeMarkerTick { scale: 1 2.3; }
 
 .videoScrubber {
   height: 5px;
@@ -472,11 +792,15 @@ video {
   height: 5px;
   appearance: none;
   width: 100%;
-  background-image: linear-gradient(to right, var(--track-fill) 0%, var(--track-fill) var(--pct), var(--track) var(--pct), var(--track) 100%);
+  background-image: linear-gradient(
+    to right,
+    var(--track-fill) 0%,
+    var(--track-fill) var(--pct),
+    var(--track) var(--pct),
+    var(--track) 100%
+  );
 }
-.videoScrubber input::-webkit-slider-thumb {
-  opacity: 0;
-}
+.videoScrubber input::-webkit-slider-thumb { opacity: 0; }
 
 .videoTime {
   display: flex;
@@ -486,23 +810,11 @@ video {
   font-size: 15px;
   border-top: 1px solid var(--border);
 }
-.videoTime button {
-  font-size: 20px;
-}
+.videoTime button { font-size: 20px; }
 
-.timecodeList {
-  overflow: auto;
-  padding: 10px 20px;
-}
-.timecodeList td {
-  padding: 10px 5px;
-}
-.timecodeList button {
-  color: var(--link);
-}
-.timecodeList button:hover {
-  color: var(--link);
-}
+.timecodeList { overflow: auto; padding: 10px 20px; }
+.timecodeList td { padding: 10px 5px; }
+.timecodeList button { color: var(--link); }
 
 .timecodeMarkers {
   position: absolute;
@@ -517,9 +829,7 @@ video {
   background: rgba(0, 0, 0, 0.01);
   translate: -4px 0;
 }
-.timecodeMarker:hover .timecodeMarkerLabel {
-  opacity: 1;
-}
+.timecodeMarker:hover .timecodeMarkerLabel { opacity: 1; }
 
 .timecodeMarkerTick {
   height: 5px;
@@ -558,10 +868,5 @@ video {
   max-width: 200px;
   color: var(--mid);
 }
-.timecodeMarkerLabel.right {
-  right: 0;
-}
-.timecodeMarkerLabel p {
-  color: var(--text);
-  font-size: 13px;
-}
+.timecodeMarkerLabel.right { right: 0; }
+.timecodeMarkerLabel p { color: var(--text); font-size: 13px; }
