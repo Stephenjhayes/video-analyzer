@@ -183,6 +183,24 @@ main {
 }
 .modeList .button:hover { background: var(--border); }
 .modeList .button.active { outline: 2px solid var(--text); }
+.modeList .button.cached { outline-color: var(--link); }
+.modeList .button.active.cached { outline: 2px solid var(--text); }
+
+.cachedDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--link);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.noResult {
+  padding: 20px 0;
+  font-size: 14px;
+  opacity: 0.5;
+}
 
 .generateButton {
   padding: 12px 20px;

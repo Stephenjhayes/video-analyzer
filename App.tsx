@@ -62,6 +62,20 @@ const PROVIDERS: { id: Provider; label: string; defaultModel: string; models: st
   },
 ];
 
+// ─── Result cache types ───────────────────────────────────────────────────────
+
+interface TimecodeResult { type: 'timecodes'; timecodes: any[] }
+interface DiagramResult  { type: 'diagram';   mermaid: string; plantuml: string; summary?: string }
+interface JsonlResult    { type: 'jsonl';     contexts: any[]; metadata?: any }
+type ModeResult = TimecodeResult | DiagramResult | JsonlResult;
+
+// Cache key: "provider:model:mode"
+type ResultCache = Record<string, ModeResult>;
+
+function cacheKey(config: ProviderConfig, mode: string): string {
+  return `${config.provider}:${config.model ?? ''}:${mode}`;
+}
+
 // ─── Session storage helpers ──────────────────────────────────────────────────
 
 const STORAGE_KEY = 'va_provider_config';
@@ -179,12 +193,12 @@ export default function App() {
   const [vidUrl, setVidUrl] = useState<string | null>(null);
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const [file, setFile] = useState<UploadedFile | null>(null);
-  const [timecodeList, setTimecodeList] = useState<any[] | null>(null);
-  const [diagramData, setDiagramData] = useState<{ mermaid: string; plantuml: string; summary?: string } | null>(null);
-  const [jsonlData, setJsonlData] = useState<{ contexts: any[]; metadata?: any } | null>(null);
+
+  // Cache: all results across all modes & providers, keyed by "provider:model:mode"
+  const [resultCache, setResultCache] = useState<ResultCache>({});
+
   const [requestedTimecode, setRequestedTimecode] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState(Object.keys(modes)[0]);
-  const [activeMode, setActiveMode] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const [isExtractingFrames, setIsExtractingFrames] = useState(false);
@@ -195,16 +209,24 @@ export default function App() {
   );
   const scrollRef = useRef<HTMLElement | null>(null);
 
-  // ─── Response handlers ──────────────────────────────────────────────────────
+  // ─── Cache helpers ───────────────────────────────────────────────────────────
 
-  const setTimecodes = ({ timecodes }: { timecodes: any[] }) =>
-    setTimecodeList(timecodes.map((t) => ({ ...t, text: t.text?.replaceAll("\\'", "'") })));
+  const getCached = (mode: string): ModeResult | null =>
+    providerConfig ? (resultCache[cacheKey(providerConfig, mode)] ?? null) : null;
 
-  const setWorkflowDiagrams = ({ mermaid, plantuml, summary }: any) =>
-    setDiagramData({ mermaid, plantuml, summary });
+  const setCached = (mode: string, result: ModeResult) => {
+    if (!providerConfig) return;
+    setResultCache((prev) => ({ ...prev, [cacheKey(providerConfig, mode)]: result }));
+  };
 
-  const setJsonlContext = ({ contexts, metadata }: any) =>
-    setJsonlData({ contexts, metadata });
+  const clearCacheForMode = (mode: string) => {
+    if (!providerConfig) return;
+    setResultCache((prev) => {
+      const next = { ...prev };
+      delete next[cacheKey(providerConfig, mode)];
+      return next;
+    });
+  };
 
   // ─── Video upload ───────────────────────────────────────────────────────────
 
@@ -217,9 +239,8 @@ export default function App() {
 
     setIsLoadingVideo(true);
     setVideoError(false);
-    setTimecodeList(null);
-    setDiagramData(null);
-    setJsonlData(null);
+    // Clear all cached results when a new video is loaded
+    setResultCache({});
 
     const objectUrl = URL.createObjectURL(videoFile);
     setVidUrl(objectUrl);
@@ -229,7 +250,6 @@ export default function App() {
         const res = await uploadFileToGemini(videoFile, providerConfig.apiKey);
         setFile(res);
       } else {
-        // For non-Gemini: store reference; frames extracted on first analyse
         setFile({ uri: objectUrl, mimeType: videoFile.type, frames: [] });
       }
       setIsLoadingVideo(false);
@@ -242,19 +262,22 @@ export default function App() {
 
   // ─── Mode execution ─────────────────────────────────────────────────────────
 
-  const onModeSelect = async (mode: string) => {
+  const runMode = async (mode: string, force = false) => {
     if (!file || !providerConfig) return;
 
-    setActiveMode(mode);
+    // If cached and not forcing a re-run, just switch to it
+    if (!force && getCached(mode)) {
+      setSelectedMode(mode);
+      return;
+    }
+
+    setSelectedMode(mode);
     setIsLoading(true);
-    setTimecodeList(null);
-    setDiagramData(null);
-    setJsonlData(null);
 
     try {
       let uploadedFile = file;
 
-      // Extract frames for non-Gemini providers
+      // Extract frames for non-Gemini providers (cached on the file object after first run)
       if (providerConfig.provider !== 'gemini' && videoElement) {
         if (!file.frames || file.frames.length === 0) {
           setIsExtractingFrames(true);
@@ -270,27 +293,65 @@ export default function App() {
         ? modeConfig.prompt
         : modeConfig.prompt('');
 
+      let captured: ModeResult | null = null;
+
       const fnMap: Record<string, (args: any) => void> = {
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({ timecodes }: any) => setTimecodeList(timecodes),
-        set_workflow_diagrams: setWorkflowDiagrams,
-        set_jsonl_context: setJsonlContext,
+        set_timecodes: ({ timecodes }: any) => {
+          captured = { type: 'timecodes', timecodes: timecodes.map((t: any) => ({ ...t, text: t.text?.replaceAll("\\'", "'") })) };
+        },
+        set_timecodes_with_objects: ({ timecodes }: any) => {
+          captured = { type: 'timecodes', timecodes: timecodes.map((t: any) => ({ ...t, text: t.text?.replaceAll("\\'", "'") })) };
+        },
+        set_timecodes_with_numeric_values: ({ timecodes }: any) => {
+          captured = { type: 'timecodes', timecodes };
+        },
+        set_workflow_diagrams: ({ mermaid, plantuml, summary }: any) => {
+          captured = { type: 'diagram', mermaid, plantuml, summary };
+        },
+        set_jsonl_context: ({ contexts, metadata }: any) => {
+          captured = { type: 'jsonl', contexts, metadata };
+        },
       };
 
       const resp = await generateContent(prompt, functions(fnMap), uploadedFile, providerConfig);
-
       const call = (resp as any).functionCalls?.[0];
       if (call && fnMap[call.name]) {
         fnMap[call.name](call.args);
       }
+
+      if (captured) setCached(mode, captured);
+
     } catch (err: any) {
       console.error('Generate error:', err);
       alert(`Analysis error: ${err?.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
       setIsExtractingFrames(false);
-      scrollRef.current?.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
+    }
+  };
+
+  // Clicking a mode button: show cached result instantly, or prompt to analyse
+  const onModeClick = (mode: string) => {
+    setSelectedMode(mode);
+  };
+
+  // ─── Provider change — clear uploaded Gemini file ref but keep frame cache ──
+
+  const handleProviderChange = (config: ProviderConfig) => {
+    setProviderConfig(config);
+    // If switching away from Gemini, reset the file so frames get re-extracted
+    // (Gemini URI is not valid for other providers and vice versa)
+    if (file && vidUrl) {
+      if (config.provider === 'gemini') {
+        // Will need to re-upload to Gemini — clear so upload is triggered again
+        setFile(null);
+        setVidUrl(null);
+        setResultCache({});
+      } else {
+        // Keep local frames if already extracted
+        setFile((prev) => prev ? { uri: vidUrl, mimeType: prev.mimeType, frames: prev.frames } : null);
+      }
     }
   };
 
@@ -306,6 +367,14 @@ export default function App() {
 
   const currentMode = (modes as any)[selectedMode];
   const providerLabel = PROVIDERS.find((p) => p.id === providerConfig.provider)?.label || '';
+  const activeResult = getCached(selectedMode);
+
+  // Count how many modes have cached results for the current provider+model
+  const cachedModes = new Set(
+    Object.keys(resultCache)
+      .filter((k) => k.startsWith(`${providerConfig.provider}:${providerConfig.model ?? ''}:`))
+      .map((k) => k.split(':').slice(2).join(':'))
+  );
 
   return (
     <main
@@ -333,25 +402,40 @@ export default function App() {
 
                 <h2>Analyse video via:</h2>
                 <div className="modeList">
-                  {Object.entries(modes).map(([mode, modeData]: [string, any]) => (
-                    <button
-                      key={mode}
-                      className={c('button', { active: mode === selectedMode })}
-                      onClick={() => setSelectedMode(mode)}>
-                      <span className="emoji">{modeData.emoji}</span>
-                      {mode}
-                    </button>
-                  ))}
+                  {Object.entries(modes).map(([mode, modeData]: [string, any]) => {
+                    const isCached = cachedModes.has(mode);
+                    return (
+                      <button
+                        key={mode}
+                        className={c('button', { active: mode === selectedMode, cached: isCached })}
+                        onClick={() => onModeClick(mode)}>
+                        <span className="emoji">{modeData.emoji}</span>
+                        {mode}
+                        {isCached && <span className="cachedDot" title="Result cached" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <div>
-                <button
-                  className="button generateButton"
-                  onClick={() => onModeSelect(selectedMode)}
-                  disabled={isLoading}>
-                  {isLoading ? '⏳ Analysing...' : '▶️ Analyse'}
-                </button>
+                {/* Show re-run button if cached, run button otherwise */}
+                {activeResult && !isLoading ? (
+                  <div className="analyseButtons">
+                    <button
+                      className="button generateButton"
+                      onClick={() => runMode(selectedMode, true)}>
+                      🔄 Re-run
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="button generateButton"
+                    onClick={() => runMode(selectedMode)}
+                    disabled={isLoading}>
+                    {isLoading ? '⏳ Analysing...' : '▶️ Analyse'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -368,7 +452,7 @@ export default function App() {
         <VideoPlayer
           url={vidUrl}
           requestedTimecode={requestedTimecode}
-          timecodeList={timecodeList}
+          timecodeList={activeResult?.type === 'timecodes' ? activeResult.timecodes : null}
           jumpToTimecode={setRequestedTimecode}
           isLoadingVideo={isLoadingVideo}
           videoError={videoError}
@@ -376,25 +460,29 @@ export default function App() {
         />
       </section>
 
-      {/* Output: diagrams below video pane for diagram mode, inline otherwise */}
+      {/* Output panel */}
       <div className={c('tools', { inactive: !vidUrl })}>
         <section
-          className={c('output', { ['mode' + activeMode]: activeMode })}
+          className={c('output', { ['mode' + selectedMode]: selectedMode })}
           ref={scrollRef as any}>
+
           {isLoading ? (
             <div className="loading">
               {isExtractingFrames
                 ? <>Extracting video frames<span>...</span></>
                 : <>Waiting for {providerLabel}<span>...</span></>}
             </div>
-          ) : diagramData ? (
-            <DiagramView data={diagramData} />
-          ) : jsonlData ? (
-            <JSONLView data={jsonlData} />
-          ) : timecodeList ? (
+
+          ) : activeResult?.type === 'diagram' ? (
+            <DiagramView data={activeResult} />
+
+          ) : activeResult?.type === 'jsonl' ? (
+            <JSONLView data={activeResult} />
+
+          ) : activeResult?.type === 'timecodes' ? (
             currentMode?.isList ? (
               <ul>
-                {timecodeList.map(({ time, text }, i) => (
+                {activeResult.timecodes.map(({ time, text }, i) => (
                   <li key={i} className="outputItem">
                     <button onClick={() => setRequestedTimecode(timeToSecs(time))}>
                       <time>{time}</time>
@@ -404,7 +492,7 @@ export default function App() {
                 ))}
               </ul>
             ) : (
-              timecodeList.map(({ time, text }, i) => (
+              activeResult.timecodes.map(({ time, text }, i) => (
                 <span key={i}>
                   <span
                     className="sentence"
@@ -416,7 +504,13 @@ export default function App() {
                 </span>
               ))
             )
+
+          ) : vidUrl ? (
+            <div className="noResult">
+              <p>Select a mode and click <strong>▶️ Analyse</strong> to get started.</p>
+            </div>
           ) : null}
+
         </section>
       </div>
     </main>
